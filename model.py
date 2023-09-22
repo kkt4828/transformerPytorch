@@ -56,12 +56,9 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.layerNorm(x + self.linear(x))
 
-class Encoder(nn.Module):
-    def __init__(self, embDim, kDim, vDim, N = 4):
+class EncoderBlock(nn.Module):
+    def __init__(self, embDim, kDim, vDim, N):
         super().__init__()
-        self.embDim = embDim
-        self.kDim = kDim
-        self.vDim = vDim
         self.layerNorm = nn.LayerNorm(vDim)
         self.linear = nn.Linear(embDim, vDim)
         self.head = MultiHeadAttention(N, embDim, kDim, vDim)
@@ -71,6 +68,19 @@ class Encoder(nn.Module):
         x = torch.add(self.linear(x), self.head(x))
         x = self.layerNorm(x)
         x = self.feedForwardNet(x)
+        return x
+
+class Encoder(nn.Module):
+    def __init__(self, embDim, kDim, vDim, N = 4, blockN = 6):
+        super().__init__()
+        encoderBlockList = [EncoderBlock(embDim, kDim, vDim, N)]
+        encoderBlockList += [EncoderBlock(vDim, kDim, vDim, N) for _ in range(blockN - 1)]
+        self.encoderBlocks = nn.Sequential(
+            *encoderBlockList
+        )
+
+    def forward(self, x):
+        x = self.encoderBlocks(x)
         return x
 
 class Decoder(nn.Module):

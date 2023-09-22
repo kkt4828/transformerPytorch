@@ -48,21 +48,23 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-    def __init__(self, vDim):
+    def __init__(self, vDim, hDim):
         super().__init__()
-        self.linear = nn.Linear(vDim, vDim)
+        self.linear1 = nn.Linear(vDim, hDim)
+        self.relu = nn.ReLU()
+        self.linear2 = nn.Linear(hDim, vDim)
         self.layerNorm = nn.LayerNorm(vDim)
 
     def forward(self, x):
-        return self.layerNorm(x + self.linear(x))
+        return self.layerNorm(x + self.linear2(self.relu(self.linear1(x))))
 
 class EncoderBlock(nn.Module):
-    def __init__(self, embDim, kDim, vDim, N):
+    def __init__(self, embDim, kDim, hDim, vDim, N):
         super().__init__()
         self.layerNorm = nn.LayerNorm(vDim)
         self.linear = nn.Linear(embDim, vDim)
         self.head = MultiHeadAttention(N, embDim, kDim, vDim)
-        self.feedForwardNet = FeedForward(vDim)
+        self.feedForwardNet = FeedForward(vDim, hDim)
 
     def forward(self, x):
         x = torch.add(self.linear(x), self.head(x))
@@ -71,10 +73,10 @@ class EncoderBlock(nn.Module):
         return x
 
 class Encoder(nn.Module):
-    def __init__(self, embDim, kDim, vDim, N = 4, blockN = 6):
+    def __init__(self, embDim, kDim, hDim, vDim, N = 4, blockN = 6):
         super().__init__()
-        encoderBlockList = [EncoderBlock(embDim, kDim, vDim, N)]
-        encoderBlockList += [EncoderBlock(vDim, kDim, vDim, N) for _ in range(blockN - 1)]
+        encoderBlockList = [EncoderBlock(embDim, kDim, hDim, vDim, N)]
+        encoderBlockList += [EncoderBlock(vDim, kDim, hDim, vDim, N) for _ in range(blockN - 1)]
         self.encoderBlocks = nn.Sequential(
             *encoderBlockList
         )
@@ -93,6 +95,6 @@ if __name__ == "__main__":
     keyDim = 64
     valueDim = 128
     testInput = torch.randn(3, embDim)
-    transformerEncoder = Encoder(embDim=embDim, kDim=keyDim, vDim=valueDim, N = 4)
+    transformerEncoder = Encoder(embDim=embDim, kDim=keyDim, hDim = 2048, vDim=valueDim, N = 4)
     print(transformerEncoder(testInput).shape)
     # print(transformerEncoder(testInput))

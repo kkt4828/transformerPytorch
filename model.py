@@ -1,14 +1,19 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 class ScaledDotProudct(nn.Module):
-    def __init__(self):
+    def __init__(self, masking = False):
         super().__init__()
-
+        self.masking = masking
     def forward(self, x):
         qm, km, vm = x
-        qkm = torch.matmul(qm, km.T) / torch.sqrt(torch.tensor(qm.shape[0]))
-        soft = nn.functional.softmax(torch.matmul(qkm, vm), dim = 1)
+        qkm = torch.matmul(qm, torch.transpose(km, 1, 2)) / torch.sqrt(torch.tensor(qm.shape[-1]))
+        if self.masking:
+            maskSize = qkm.shape[-1]
+            mask = torch.tensor([[0 if j <= i else -np.inf for j in range(maskSize)] for i in range(maskSize)])
+            qkm = torch.add(qkm, mask)
+        soft = nn.functional.softmax(torch.matmul(qkm, vm), dim = -1)
         return soft
 
 class HeadAttetion(nn.Module):
@@ -43,7 +48,7 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, x):
         mhaResult = [self.mha[i](x) for i in range(self.N)]
-        mhaResult = torch.concat(mhaResult, dim = 1)
+        mhaResult = torch.concat(mhaResult, dim = -1)
         return mhaResult
 
 
@@ -73,7 +78,7 @@ class EncoderBlock(nn.Module):
         return x
 
 class Encoder(nn.Module):
-    def __init__(self, embDim, kDim, hDim, vDim, N = 4, blockN = 6):
+    def __init__(self, embDim, kDim, hDim, vDim, N = 8, blockN = 6):
         super().__init__()
         encoderBlockList = [EncoderBlock(embDim, kDim, hDim, vDim, N)]
         encoderBlockList += [EncoderBlock(vDim, kDim, hDim, vDim, N) for _ in range(blockN - 1)]
@@ -91,10 +96,10 @@ class Decoder(nn.Module):
 
 
 if __name__ == "__main__":
-    embDim = 256
-    keyDim = 64
-    valueDim = 128
-    testInput = torch.randn(3, embDim)
-    transformerEncoder = Encoder(embDim=embDim, kDim=keyDim, hDim = 2048, vDim=valueDim, N = 4)
+    embDim = 512
+    keyDim = 512
+    valueDim = 512
+    testInput = torch.randn(3, 4, embDim)
+    transformerEncoder = Encoder(embDim=embDim, kDim=keyDim, hDim = 2048, vDim=valueDim, N = 8)
     print(transformerEncoder(testInput).shape)
     # print(transformerEncoder(testInput))
